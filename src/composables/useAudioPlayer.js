@@ -85,6 +85,11 @@ audio.volume = volume.value;
 audio.addEventListener('timeupdate', () => {
   currentTime.value = audio.currentTime;
   
+  // 兜底保障：有些移动端浏览器在真正播放前不会触发 loadedmetadata，在 timeupdate 时强制同步一次正确的总时长
+  if (audio.duration && !isNaN(audio.duration) && duration.value !== audio.duration) {
+    duration.value = audio.duration;
+  }
+  
   // Update lyric index
   if (lyrics.value.length > 0) {
     let index = lyrics.value.findIndex(l => l.time > currentTime.value) - 1;
@@ -96,7 +101,15 @@ audio.addEventListener('timeupdate', () => {
 });
 
 audio.addEventListener('loadedmetadata', () => {
-  duration.value = audio.duration;
+  if (audio.duration && !isNaN(audio.duration)) {
+    duration.value = audio.duration;
+  }
+});
+
+audio.addEventListener('durationchange', () => {
+  if (audio.duration && !isNaN(audio.duration)) {
+    duration.value = audio.duration;
+  }
 });
 
 audio.addEventListener('ended', () => {
@@ -432,6 +445,44 @@ const addLocalFolder = () => {
   
   input.click();
 };
+
+// 监听播放列表的歌曲ID变化，实时更新到地址栏 URL 参数中
+const playlistIds = computed(() => playlist.value.map(s => s.id).join(','));
+watch(playlistIds, (newIds) => {
+  const url = new URL(window.location);
+  if (newIds) {
+    // 绕过标准 API 的自动转义，手动拼接查询参数，保留原始逗号
+    window.history.replaceState({}, '', `${url.pathname}?list=${newIds}`);
+  } else {
+    // 列表为空时，清空参数
+    window.history.replaceState({}, '', url.pathname);
+  }
+});
+
+// 初始化时从 URL 读取播放列表
+const initPlaylistFromUrl = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const listParam = urlParams.get('list');
+  if (listParam) {
+    const ids = listParam.split(',').map(id => parseInt(id, 10));
+    const initialPlaylist = [];
+    ids.forEach(id => {
+      // 只能匹配服务器曲库的歌曲，本地临时导入的歌曲无法通过 URL 恢复
+      const song = librarySongs.value.find(s => s.id === id);
+      if (song) {
+        initialPlaylist.push(song);
+      }
+    });
+    if (initialPlaylist.length > 0) {
+      playlist.value = initialPlaylist;
+      // 预加载第一首歌，但不播放，保持初始暂停状态
+      loadSong(0);
+    }
+  }
+};
+
+// 立即执行初始化
+initPlaylistFromUrl();
 
 export function useAudioPlayer() {
   return {

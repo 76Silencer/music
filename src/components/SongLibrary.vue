@@ -32,11 +32,12 @@ const filteredSongs = computed(() => {
     
     <div class="song-list">
       <div 
-        v-for="song in filteredSongs" 
+        v-for="(song, index) in filteredSongs" 
         :key="song.id"
         class="song-item"
         @click="addToPlaylist(song)"
       >
+        <span class="song-index" v-if="!song.isLocal">{{ song.id }}</span>
         <img :src="song.cover" alt="cover" class="cover-img" />
         <div class="song-info">
           <div class="title">{{ song.title }}</div>
@@ -60,6 +61,13 @@ const filteredSongs = computed(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
+}
+
+@media (max-width: 768px) {
+  .library {
+    padding: 15px;
+  }
 }
 
 .library-header {
@@ -133,6 +141,15 @@ h2 {
 
 .song-item:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.song-index {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 13px;
+  width: 24px;
+  text-align: center;
+  margin-right: 8px;
+  font-family: monospace;
 }
 
 .cover-img {

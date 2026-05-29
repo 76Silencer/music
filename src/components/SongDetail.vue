@@ -21,26 +21,30 @@ const handleUserInteraction = () => {
   }, 3000);
 };
 
-const getLyricStyle = (line, index) => {
-  if (index < currentLyricIndex.value) {
-    return { '--progress': '100%', transition: 'none' };
-  } else if (index > currentLyricIndex.value) {
-    return { '--progress': '0%', transition: 'none' };
+const getCharStyle = (line, charIndex, totalChars) => {
+  const passed = currentTime.value - line.time;
+  const estimatedSingingTime = totalChars * 0.35;
+  const playDuration = Math.min(line.duration, estimatedSingingTime);
+  
+  const charDuration = playDuration / totalChars;
+  const charStartTime = charIndex * charDuration;
+  
+  let percentage = 0;
+  if (passed >= charStartTime + charDuration) {
+    percentage = 100;
+  } else if (passed <= charStartTime) {
+    percentage = 0;
   } else {
-    // 正在播放的当前句
-    const passed = currentTime.value - line.time;
-    // 限制单句变色的最大时长为 6 秒，防止长间奏导致染色卡住不动
-    const duration = Math.min(line.duration, 6);
-    const percentage = Math.min(100, Math.max(0, (passed / duration) * 100));
-    
-    // 如果刚跳转到这句（不到 0.3 秒），关闭渐变动画，防止出现颜色倒推的视觉拖影
-    const transition = passed < 0.3 ? 'none' : 'background-size 0.25s linear';
-    
-    return { 
-      '--progress': `${percentage}%`,
-      transition
-    };
+    percentage = ((passed - charStartTime) / charDuration) * 100;
   }
+  
+  // 当刚跳过时关闭动画防止倒退拖影
+  const transition = passed < 0.3 ? 'none' : 'background-size 0.25s linear';
+  
+  return { 
+    '--char-progress': `${percentage}%`,
+    transition
+  };
 };
 
 const scrollLyrics = async () => {
@@ -114,7 +118,19 @@ onMounted(() => {
               class="lyric-line"
               :class="{ 'active': currentLyricIndex === index }"
             >
-              <span class="lyric-text" :style="getLyricStyle(line, index)">{{ line.text }}</span>
+              <div class="lyric-text-wrapper">
+                <template v-if="currentLyricIndex === index">
+                  <span 
+                    v-for="(char, charIndex) in line.text" 
+                    :key="charIndex"
+                    class="lyric-char"
+                    :style="getCharStyle(line, charIndex, line.text.length)"
+                  >{{ char }}</span>
+                </template>
+                <template v-else>
+                  <span class="lyric-text" :class="{ 'played': index < currentLyricIndex }">{{ line.text }}</span>
+                </template>
+              </div>
               <button class="play-lyric-btn" @click.stop="playFromLyric(line.time)" title="从此处播放">▶</button>
             </div>
           </template>
@@ -259,6 +275,7 @@ onMounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 250px 0; /* 加大上下 padding，使首尾歌词都能完全滚动到中间 */
+  position: relative; /* 关键：让内部歌词的 offsetTop 相对于此容器计算 */
   mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
   -webkit-mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
   text-align: center;
@@ -280,15 +297,17 @@ onMounted(() => {
   padding: 0 40px; /* 给右侧播放按钮留出空间，保持文字居中 */
 }
 
+.lyric-text-wrapper {
+  display: inline;
+}
+
 .lyric-text {
-  background-color: rgba(255,255,255,0.4);
-  background-image: linear-gradient(to right, rgba(255,255,255,0.8), rgba(255,255,255,0.8));
-  background-size: var(--progress) 100%;
-  background-repeat: no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  transition: background-size 0.25s linear;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.3s ease;
+}
+
+.lyric-text.played {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .lyric-line.active {
@@ -298,9 +317,14 @@ onMounted(() => {
   filter: drop-shadow(0 0 8px rgba(255,255,255,0.3));
 }
 
-.lyric-line.active .lyric-text {
+.lyric-char {
   background-color: #fff;
   background-image: linear-gradient(to right, #3b82f6, #3b82f6);
+  background-size: var(--char-progress, 0%) 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .play-lyric-btn {
@@ -331,5 +355,64 @@ onMounted(() => {
   text-align: center;
   margin-top: 100px;
   font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  .detail-content {
+    flex-direction: column;
+    padding: 20px 20px 20px; /* 减小顶部 padding，原来是 60px */
+    gap: 15px;
+    align-items: center;
+    justify-content: flex-start;
+  }
+  
+  .cover-section {
+    flex: none;
+    justify-content: center;
+    margin-top: 10px;
+  }
+  
+  .cd-wrapper {
+    width: 160px;
+    height: 160px;
+    border-width: 4px;
+  }
+  
+  .large-cover {
+    width: 110px;
+    height: 110px;
+  }
+  
+  .lyrics-section {
+    flex: 1;
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* 关键：允许 flex 子项收缩 */
+  }
+  
+  .song-title {
+    font-size: 20px;
+    margin-bottom: 6px;
+  }
+  
+  .song-artist {
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
+  
+  .lyrics-container {
+    padding: 120px 0; /* 适配移动端高度变小 */
+  }
+  
+  .lyric-line {
+    padding: 0 20px;
+    font-size: 14px;
+  }
+  
+  .lyric-line.active {
+    font-size: 18px;
+  }
 }
 </style>

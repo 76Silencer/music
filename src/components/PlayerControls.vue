@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useAudioPlayer } from '../composables/useAudioPlayer';
 
 const {
@@ -16,6 +16,16 @@ const {
   setPlayMode
 } = useAudioPlayer();
 
+const isDragging = ref(false);
+const localTime = ref(0);
+
+// 当没有拖拽时，保持本地时间和真实播放时间同步
+watch(currentTime, (newTime) => {
+  if (!isDragging.value) {
+    localTime.value = newTime;
+  }
+});
+
 const formatTime = (time) => {
   if (!time || isNaN(time)) return '0:00';
   const m = Math.floor(time / 60);
@@ -23,8 +33,22 @@ const formatTime = (time) => {
   return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
-const handleSeek = (e) => {
+const handleSeekInput = (e) => {
+  isDragging.value = true;
+  localTime.value = Number(e.target.value);
+};
+
+const handleSeekChange = (e) => {
   seek(Number(e.target.value));
+  isDragging.value = false;
+};
+
+const handleSeekEnd = () => {
+  // 确保在手机端 touchend 时也能正确释放拖拽状态
+  if (isDragging.value) {
+    seek(localTime.value);
+    isDragging.value = false;
+  }
 };
 
 const handleVolume = (e) => {
@@ -51,13 +75,16 @@ const modeLabel = computed(() => {
   <div class="player-controls">
     <!-- Progress Bar -->
     <div class="progress-container">
-      <span class="time">{{ formatTime(currentTime) }}</span>
+      <span class="time">{{ formatTime(localTime) }}</span>
       <input 
         type="range" 
         class="progress-bar" 
-        :value="currentTime" 
+        :value="localTime" 
         :max="duration" 
-        @input="handleSeek"
+        @input="handleSeekInput"
+        @change="handleSeekChange"
+        @touchend="handleSeekEnd"
+        @mouseup="handleSeekEnd"
       />
       <span class="time">{{ formatTime(duration) }}</span>
     </div>
@@ -115,26 +142,34 @@ const modeLabel = computed(() => {
 
 .progress-bar {
   flex: 1;
-  height: 4px;
+  height: 24px; /* 加大移动端触摸区域 */
   -webkit-appearance: none;
-  background: #4d4d4d;
-  border-radius: 2px;
+  background: transparent;
   outline: none;
   cursor: pointer;
+  margin: 0;
+}
+
+.progress-bar::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  background: #4d4d4d;
+  border-radius: 2px;
   transition: background 0.2s;
 }
 
-.progress-bar:hover {
+.progress-bar:hover::-webkit-slider-runnable-track {
   background: #666;
 }
 
 .progress-bar::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: #3b82f6;
   cursor: pointer;
+  margin-top: -5px; /* (4px - 14px) / 2 */
   transition: transform 0.1s;
 }
 
@@ -210,29 +245,68 @@ button:active {
 
 .volume-bar {
   width: 100%;
-  height: 4px;
+  height: 24px; /* 加大移动端触摸区域 */
   -webkit-appearance: none;
-  background: #4d4d4d;
-  border-radius: 2px;
+  background: transparent;
   outline: none;
   cursor: pointer;
+  margin: 0;
+}
+
+.volume-bar::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  background: #4d4d4d;
+  border-radius: 2px;
   transition: background 0.2s;
 }
 
-.volume-bar:hover {
+.volume-bar:hover::-webkit-slider-runnable-track {
   background: #666;
 }
 
 .volume-bar::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: #fff;
   cursor: pointer;
+  margin-top: -4px;
 }
 
 .volume-bar::-webkit-slider-thumb:hover {
   background: #3b82f6;
+}
+
+@media (max-width: 768px) {
+  .controls-row {
+    position: relative;
+    justify-content: center;
+  }
+  
+  .mode-btn {
+    position: absolute;
+    left: 0;
+    width: auto;
+  }
+  
+  .volume-container {
+    position: absolute;
+    right: 0;
+    width: 70px;
+  }
+  
+  .volume-container span {
+    display: none; /* 移动端隐藏音量图标以节省空间 */
+  }
+  
+  .main-controls {
+    gap: 15px;
+  }
+  
+  .play-btn {
+    font-size: 36px;
+  }
 }
 </style>
