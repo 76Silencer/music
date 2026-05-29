@@ -1,5 +1,6 @@
 import { ref, computed, watch } from 'vue';
-import { songs as librarySongs } from '../data/songs';
+import { songs as initialSongs } from '../data/songs';
+import * as jsmediatags from 'jsmediatags';
 
 const audio = new Audio();
 const isPlaying = ref(false);
@@ -9,8 +10,10 @@ const volume = ref(0.3); // 默认音量设置为 30%
 const playMode = ref('sequence'); // 'sequence', 'loop', 'random'
 const playlist = ref([]);
 const currentSongIndex = ref(-1);
+const loadedSongId = ref(null);
 const lyrics = ref([]);
 const currentLyricIndex = ref(-1);
+const librarySongs = ref([...initialSongs]);
 
 const currentSong = computed(() => {
   if (currentSongIndex.value >= 0 && currentSongIndex.value < playlist.value.length) {
@@ -37,12 +40,23 @@ const parseLrc = (lrcText) => {
       }
     }
   }
+
+  // 计算每句歌词的持续时间（用于卡拉OK逐字变色效果）
+  for (let i = 0; i < parsed.length; i++) {
+    if (i < parsed.length - 1) {
+      parsed[i].duration = parsed[i + 1].time - parsed[i].time;
+    } else {
+      parsed[i].duration = 5; // 最后一句默认给 5 秒
+    }
+  }
+
   return parsed;
 };
 
 const fetchLyrics = async (url) => {
   lyrics.value = [];
   currentLyricIndex.value = -1;
+  // url e.g., "./music/song1.mp3" -> "./music/song1.lrc"
   const lrcUrl = url.replace(/\.(mp3|flac)$/i, '.lrc');
   try {
     const response = await fetch(lrcUrl);
@@ -104,9 +118,7 @@ watch(volume, (newVol) => {
 const play = () => {
   if (!currentSong.value) return;
   
-  // 浏览器底层对于中文等特殊字符或带有空格的文件名（如 FLAC），在赋给 audio.src 时会被自动 URL 编码。
-  // 为了确保能够准确匹配到我们内存中的原路径，需要使用 decodeURIComponent 对 audio.src 进行解码比对。
-  if (!audio.src || !decodeURIComponent(audio.src).endsWith(currentSong.value.url)) {
+  if (loadedSongId.value !== currentSong.value.id) {
     loadSong(currentSongIndex.value);
   }
   const playPromise = audio.play();
@@ -132,9 +144,31 @@ const togglePlay = () => {
 const loadSong = (index) => {
   if (index < 0 || index >= playlist.value.length) return;
   currentSongIndex.value = index;
-  audio.src = playlist.value[index].url;
+  const song = playlist.value[index];
+  
+  loadedSongId.value = song.id;
+  audio.src = song.url;
   audio.load();
-  fetchLyrics(playlist.value[index].url);
+  
+  if (song.isLocal || song.url.startsWith('blob:')) {
+    lyrics.value = [];
+    currentLyricIndex.value = -1;
+    if (song.lrcFile) {
+      song.lrcFile.arrayBuffer().then(buffer => {
+        let text = '';
+        try {
+          const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+          text = utf8Decoder.decode(buffer);
+        } catch (e) {
+          const gbkDecoder = new TextDecoder('gbk');
+          text = gbkDecoder.decode(buffer);
+        }
+        lyrics.value = parseLrc(text);
+      }).catch(err => console.error('Failed to read local lyrics:', err));
+    }
+  } else {
+    fetchLyrics(song.url);
+  }
 };
 
 const playSongById = (songId) => {
@@ -204,6 +238,15 @@ const handleEnded = () => {
 const seek = (time) => {
   audio.currentTime = time;
   currentTime.value = time;
+  
+  // 立刻同步更新当前歌词高亮索引，消除歌词滚动的视觉延迟
+  if (lyrics.value.length > 0) {
+    let index = lyrics.value.findIndex(l => l.time > time) - 1;
+    if (index === -2) {
+      index = lyrics.value.length - 1; // 所有歌词都已通过
+    }
+    currentLyricIndex.value = index;
+  }
 };
 
 const setVolume = (val) => {
@@ -260,6 +303,7 @@ const removeFromPlaylist = (songId) => {
   if (playlist.value.length === 0) {
     pause();
     currentSongIndex.value = -1;
+    loadedSongId.value = null;
     audio.src = '';
   } else if (index === currentSongIndex.value) {
     // 移除的是当前正在播放（或暂停）的歌曲
@@ -296,6 +340,99 @@ if (import.meta.hot) {
   });
 }
 
+const extractCover = (file) => {
+  return new Promise((resolve) => {
+    jsmediatags.read(file, {
+      onSuccess: function(tag) {
+        const picture = tag.tags.picture;
+        if (picture) {
+          let base64String = "";
+          for (let i = 0; i < picture.data.length; i++) {
+            base64String += String.fromCharCode(picture.data[i]);
+          }
+          const base64 = "data:" + picture.format + ";base64," + window.btoa(base64String);
+          resolve(base64);
+        } else {
+          resolve(null);
+        }
+      },
+      onError: function(error) {
+        resolve(null);
+      }
+    });
+  });
+};
+
+const addLocalFolder = () => {
+  // 即使在非安全环境 (HTTP) 下也能通过 input 标签选择文件夹，规避了 showDirectoryPicker 对 HTTPS 的强制要求
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.webkitdirectory = true;
+  input.directory = true;
+  input.multiple = true;
+  
+  input.onchange = async (e) => {
+    const files = Array.from(e.target.files);
+    const localSongs = [];
+    let idCounter = Date.now(); // 使用时间戳确保 ID 唯一
+    
+    for (const file of files) {
+      if (file.name.toLowerCase().endsWith('.mp3') || file.name.toLowerCase().endsWith('.flac')) {
+        const url = URL.createObjectURL(file);
+        
+        let baseName = file.name.replace(/\.(mp3|flac)$/i, '');
+        let title = baseName;
+        let artist = '本地音乐';
+        
+        if (title.includes(' - ')) {
+          const parts = title.split(' - ');
+          artist = parts[0].trim();
+          title = parts.slice(1).join(' - ').trim();
+        } else if (title.includes('-')) {
+          const parts = title.split('-');
+          artist = parts[0].trim();
+          title = parts.slice(1).join('-').trim();
+        }
+        
+        const lrcFile = files.find(f => {
+          // 处理带有 webkitRelativePath 的情况（Chrome / Edge 的完整目录结构）
+          if (f.webkitRelativePath && file.webkitRelativePath) {
+            return f.webkitRelativePath.toLowerCase() === file.webkitRelativePath.replace(/\.(mp3|flac)$/i, '.lrc').toLowerCase();
+          }
+          // 降级处理：直接比较文件名
+          return f.name.toLowerCase() === file.name.replace(/\.(mp3|flac)$/i, '.lrc').toLowerCase();
+        });
+
+        // 提取本地音频文件的内置封面
+        const cover = await extractCover(file) || `https://picsum.photos/seed/local${idCounter}/300/300`;
+
+        localSongs.push({
+          id: idCounter++,
+          title,
+          artist,
+          url,
+          cover,
+          isLocal: true,
+          file: file,
+          lrcFile: lrcFile || null
+        });
+      }
+    }
+    
+    if (localSongs.length > 0) {
+      librarySongs.value.push(...localSongs);
+      alert(`成功添加 ${localSongs.length} 首本地歌曲！`);
+    } else {
+      alert('在该文件夹中没有找到 mp3 或 flac 格式的音乐。');
+    }
+    
+    // 清理创建的 DOM 元素
+    input.remove();
+  };
+  
+  input.click();
+};
+
 export function useAudioPlayer() {
   return {
     isPlaying,
@@ -320,6 +457,7 @@ export function useAudioPlayer() {
     playSongById,
     addToPlaylist,
     removeFromPlaylist,
-    moveSong
+    moveSong,
+    addLocalFolder
   };
 }

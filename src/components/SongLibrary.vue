@@ -2,13 +2,13 @@
 import { ref, computed } from 'vue';
 import { useAudioPlayer } from '../composables/useAudioPlayer';
 
-const { librarySongs, addToPlaylist } = useAudioPlayer();
+const { librarySongs, addToPlaylist, addLocalFolder } = useAudioPlayer();
 const searchQuery = ref('');
 
 const filteredSongs = computed(() => {
   const query = searchQuery.value.toLowerCase();
-  if (!query) return librarySongs;
-  return librarySongs.filter(song => 
+  if (!query) return librarySongs.value;
+  return librarySongs.value.filter(song => 
     song.title.toLowerCase().includes(query) || 
     song.artist.toLowerCase().includes(query)
   );
@@ -18,7 +18,10 @@ const filteredSongs = computed(() => {
 <template>
   <div class="library">
     <div class="library-header">
-      <h2>曲库</h2>
+      <div class="header-top">
+        <h2>曲库</h2>
+        <button class="add-folder-btn" @click="addLocalFolder" title="选择本地音乐文件夹">📂 添加本地目录</button>
+      </div>
       <input 
         type="text" 
         v-model="searchQuery" 
@@ -66,11 +69,36 @@ const filteredSongs = computed(() => {
   margin-bottom: 16px;
 }
 
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 h2 {
   font-size: 18px;
   margin: 0;
   color: #3b82f6;
   font-weight: 600;
+}
+
+.add-folder-btn {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.add-folder-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+  color: #fff;
 }
 
 .search-input {

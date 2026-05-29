@@ -1,8 +1,8 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, nextTick } from 'vue';
 import { useAudioPlayer } from '../composables/useAudioPlayer';
 
-const { currentSong, lyrics, currentLyricIndex, isPlaying, seek, play } = useAudioPlayer();
+const { currentSong, lyrics, currentLyricIndex, isPlaying, seek, play, currentTime } = useAudioPlayer();
 const lyricsContainer = ref(null);
 
 // 定义可以触发向父组件的事件
@@ -18,10 +18,33 @@ const handleUserInteraction = () => {
   scrollTimeout = setTimeout(() => {
     isUserScrolling.value = false;
     scrollLyrics();
-  }, 10000);
+  }, 3000);
 };
 
-const scrollLyrics = () => {
+const getLyricStyle = (line, index) => {
+  if (index < currentLyricIndex.value) {
+    return { '--progress': '100%', transition: 'none' };
+  } else if (index > currentLyricIndex.value) {
+    return { '--progress': '0%', transition: 'none' };
+  } else {
+    // 正在播放的当前句
+    const passed = currentTime.value - line.time;
+    // 限制单句变色的最大时长为 6 秒，防止长间奏导致染色卡住不动
+    const duration = Math.min(line.duration, 6);
+    const percentage = Math.min(100, Math.max(0, (passed / duration) * 100));
+    
+    // 如果刚跳转到这句（不到 0.3 秒），关闭渐变动画，防止出现颜色倒推的视觉拖影
+    const transition = passed < 0.3 ? 'none' : 'background-size 0.25s linear';
+    
+    return { 
+      '--progress': `${percentage}%`,
+      transition
+    };
+  }
+};
+
+const scrollLyrics = async () => {
+  await nextTick(); // 等待 Vue 重新渲染 DOM（确保 .active 类已更新到最新的一句）
   if (!lyricsContainer.value || currentLyricIndex.value < 0 || isUserScrolling.value) return;
   
   const activeLyric = lyricsContainer.value.querySelector('.lyric-line.active');
@@ -91,7 +114,7 @@ onMounted(() => {
               class="lyric-line"
               :class="{ 'active': currentLyricIndex === index }"
             >
-              <span class="lyric-text">{{ line.text }}</span>
+              <span class="lyric-text" :style="getLyricStyle(line, index)">{{ line.text }}</span>
               <button class="play-lyric-btn" @click.stop="playFromLyric(line.time)" title="从此处播放">▶</button>
             </div>
           </template>
@@ -235,9 +258,9 @@ onMounted(() => {
 .lyrics-container {
   flex: 1;
   overflow-y: auto;
-  padding: 20px 0;
-  mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+  padding: 250px 0; /* 加大上下 padding，使首尾歌词都能完全滚动到中间 */
+  mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
   text-align: center;
 }
 
@@ -247,7 +270,6 @@ onMounted(() => {
 
 .lyric-line {
   font-size: 16px;
-  color: rgba(255,255,255,0.4);
   margin-bottom: 24px;
   transition: all 0.3s ease;
   min-height: 24px;
@@ -258,12 +280,27 @@ onMounted(() => {
   padding: 0 40px; /* 给右侧播放按钮留出空间，保持文字居中 */
 }
 
+.lyric-text {
+  background-color: rgba(255,255,255,0.4);
+  background-image: linear-gradient(to right, rgba(255,255,255,0.8), rgba(255,255,255,0.8));
+  background-size: var(--progress) 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  transition: background-size 0.25s linear;
+}
+
 .lyric-line.active {
-  color: #fff;
   font-size: 20px;
   font-weight: 600;
-  text-shadow: 0 0 10px rgba(255,255,255,0.3);
   transform: scale(1.05);
+  filter: drop-shadow(0 0 8px rgba(255,255,255,0.3));
+}
+
+.lyric-line.active .lyric-text {
+  background-color: #fff;
+  background-image: linear-gradient(to right, #3b82f6, #3b82f6);
 }
 
 .play-lyric-btn {

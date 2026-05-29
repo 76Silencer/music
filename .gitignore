@@ -24,4 +24,5 @@ dist-ssr
 *.sw?
 
 # Music files
-public/music/
+public/songs/
+public/covers/

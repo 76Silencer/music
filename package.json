@@ -7,10 +7,11 @@
     "predev": "node generate-songs.js",
     "prebuild": "node generate-songs.js",
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node -e \"import('fs').then(fs => fs.rmSync('dist/songs', {recursive:true, force:true}))\"",
     "preview": "vite preview"
   },
   "dependencies": {
+    "jsmediatags": "^3.9.7",
     "vue": "^3.5.34"
   },
   "devDependencies": {
