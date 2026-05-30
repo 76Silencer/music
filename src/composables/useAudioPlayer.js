@@ -6,8 +6,8 @@ const audio = new Audio();
 const isPlaying = ref(false);
 const currentTime = ref(0);
 const duration = ref(0);
-const volume = ref(0.3); // 默认音量设置为 30%
-const playMode = ref('order'); // 'order', 'sequence', 'loop', 'random'
+const volume = ref(Number(localStorage.getItem('player_volume') || 0.3)); // 默认音量 30%，优先从 localStorage 读取
+const playMode = ref(localStorage.getItem('player_playMode') || 'order'); // 'order', 'sequence', 'loop', 'random'
 const playlist = ref([]);
 const currentSongIndex = ref(-1);
 const loadedSongId = ref(null);
@@ -126,6 +126,11 @@ audio.addEventListener('pause', () => {
 
 watch(volume, (newVol) => {
   audio.volume = newVol;
+  localStorage.setItem('player_volume', newVol);
+});
+
+watch(playMode, (newMode) => {
+  localStorage.setItem('player_playMode', newMode);
 });
 
 const play = () => {
@@ -163,6 +168,25 @@ const loadSong = (index) => {
   audio.src = song.url;
   audio.load();
   
+  // 更新系统级媒体控制通知 (Media Session API)
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: song.title,
+      artist: song.artist,
+      album: 'Vue Music Player',
+      artwork: [
+        { src: song.cover, sizes: '300x300', type: 'image/jpeg' },
+        { src: song.cover, sizes: '512x512', type: 'image/jpeg' }
+      ]
+    });
+    
+    // 绑定系统锁屏控制按钮事件
+    navigator.mediaSession.setActionHandler('play', play);
+    navigator.mediaSession.setActionHandler('pause', pause);
+    navigator.mediaSession.setActionHandler('previoustrack', prev);
+    navigator.mediaSession.setActionHandler('nexttrack', next);
+  }
+  
   if (song.isLocal || song.url.startsWith('blob:')) {
     lyrics.value = [];
     currentLyricIndex.value = -1;
@@ -198,7 +222,7 @@ const next = (isAutoPlay = false) => {
   let nextIndex = currentSongIndex.value + 1;
   let shouldPause = false;
   
-  if (playMode.value === 'loop' && isAutoPlay) {
+  if (playMode.value === 'loop' && isAutoPlay === true) {
     // 自动播放结束时，单曲循环保持播放当前歌曲
     nextIndex = currentSongIndex.value;
   } else if (playMode.value === 'random') {
@@ -214,7 +238,7 @@ const next = (isAutoPlay = false) => {
     if (nextIndex >= playlist.value.length) {
       nextIndex = 0;
       // 如果是顺序播放模式，并且是歌曲自然结束触发的自动切歌，则回到第一首并暂停
-      if (playMode.value === 'order' && isAutoPlay) {
+      if (playMode.value === 'order' && isAutoPlay === true) {
         shouldPause = true;
       }
     }
@@ -231,7 +255,7 @@ const prev = (isAutoPlay = false) => {
   
   let prevIndex = currentSongIndex.value - 1;
   
-  if (playMode.value === 'loop' && isAutoPlay) {
+  if (playMode.value === 'loop' && isAutoPlay === true) {
     prevIndex = currentSongIndex.value;
   } else if (playMode.value === 'random') {
     if (playlist.value.length > 1) {
@@ -394,7 +418,6 @@ const addLocalFolder = () => {
   input.onchange = async (e) => {
     const files = Array.from(e.target.files);
     const localSongs = [];
-    let idCounter = Date.now(); // 使用时间戳确保 ID 唯一
     
     for (const file of files) {
       if (file.name.toLowerCase().endsWith('.mp3') || file.name.toLowerCase().endsWith('.flac')) {
@@ -425,9 +448,15 @@ const addLocalFolder = () => {
 
         // 提取本地音频文件的内置封面
         const cover = await extractCover(file) || `./default-cover.svg`;
+        
+        // 首字母取 g~z，后接 5 位十六进制字符，保证 6 位长度且绝不和云端 MD5(0~9, a~f) 发生冲突
+        const firstChars = 'ghijklmnopqrstuvwxyz';
+        const firstChar = firstChars[Math.floor(Math.random() * firstChars.length)];
+        const rest = Math.floor(Math.random() * 0xfffff).toString(16).padStart(5, '0');
+        const localId = firstChar + rest;
 
         localSongs.push({
-          id: idCounter++,
+          id: localId,
           title,
           artist,
           url,

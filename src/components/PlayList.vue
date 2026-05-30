@@ -71,6 +71,33 @@ const collageCovers = computed(() => {
 const handleCollageError = (event, index) => {
   event.target.src = './default-cover.svg';
 };
+
+const showToast = ref(false);
+const toastMessage = ref('');
+let toastTimeout = null;
+
+const sharePlaylist = async () => {
+  // 只过滤出非本地歌曲的 ID
+  const shareIds = playlist.value.filter(s => !s.isLocal).map(s => s.id).join(',');
+  let shareUrl = window.location.origin + window.location.pathname;
+  if (shareIds) {
+    shareUrl += `?list=${shareIds}`;
+  }
+  
+  try {
+    await navigator.clipboard.writeText(shareUrl);
+    toastMessage.value = '成功复制歌单链接，快去分享吧！';
+  } catch (err) {
+    // 降级处理：有些浏览器不支持剪贴板 API
+    toastMessage.value = '复制失败，请手动复制地址栏链接。';
+  }
+  
+  showToast.value = true;
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    showToast.value = false;
+  }, 3000);
+};
 </script>
 
 <template>
@@ -87,6 +114,7 @@ const handleCollageError = (event, index) => {
         <h3>我的专属歌单</h3>
         <p>共 {{ playlist.length }} 首歌曲</p>
       </div>
+      <button class="share-btn" @click="sharePlaylist" title="分享歌单">↗ 分享</button>
     </div>
     
     <div class="search-box">
@@ -132,6 +160,11 @@ const handleCollageError = (event, index) => {
     </div>
     <div v-else class="empty-state">
       {{ playlist.length === 0 ? '列表是空的，快去曲库添加歌曲吧' : '没有找到匹配的歌曲' }}
+    </div>
+
+    <!-- 提示气泡 -->
+    <div class="toast" :class="{ 'show': showToast }">
+      {{ toastMessage }}
     </div>
   </div>
 </template>
@@ -275,6 +308,26 @@ h2 {
   color: #3b82f6;
 }
 
+.share-btn {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto; /* 推到最右边 */
+}
+
+.share-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+  color: #fff;
+}
+
 .count {
   font-size: 13px;
   color: #b3b3b3;
@@ -410,5 +463,29 @@ h2 {
 .song-list::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 3px;
+}
+
+.toast {
+  position: fixed;
+  bottom: 120px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: rgba(59, 130, 246, 0.9);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+
+.toast.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
 }
 </style>

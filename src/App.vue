@@ -1,12 +1,12 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import Library from './components/SongLibrary.vue';
 import PlayList from './components/PlayList.vue';
 import PlayerControls from './components/PlayerControls.vue';
 import SongDetail from './components/SongDetail.vue';
 import { useAudioPlayer } from './composables/useAudioPlayer';
 
-const { currentSong } = useAudioPlayer();
+const { currentSong, togglePlay, next, prev, volume, setVolume } = useAudioPlayer();
 const showDetail = ref(false);
 const activeTab = ref('library'); // 'library' or 'playlist'
 
@@ -15,6 +15,56 @@ const openDetail = () => {
     showDetail.value = true;
   }
 };
+
+// 全局键盘快捷键
+const handleKeydown = (e) => {
+  // 如果用户正在输入框里打字（比如搜索框），就不要触发快捷键
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  // 兼容 Windows 的 Ctrl 键和 Mac 的 Command 键
+  const isModifier = e.ctrlKey || e.metaKey;
+
+  // 1. 空格键单独用于播放/暂停（各大播放器标配，无需修饰键）
+  if (e.code === 'Space' && !isModifier) {
+    e.preventDefault(); // 防止按空格导致页面往下滚
+    togglePlay();
+    return;
+  }
+
+  // 2. 需要搭配 Ctrl/Cmd 的快捷键
+  if (isModifier) {
+    switch(e.code) {
+      case 'KeyP': // Ctrl + P 也可以播放/暂停
+        e.preventDefault();
+        togglePlay();
+        break;
+      case 'ArrowLeft': // Ctrl + 左方向键：上一首
+        e.preventDefault();
+        prev();
+        break;
+      case 'ArrowRight': // Ctrl + 右方向键：下一首
+        e.preventDefault();
+        next();
+        break;
+      case 'ArrowUp': // Ctrl + 上方向键：音量加
+        e.preventDefault();
+        setVolume(Math.min(1, volume.value + 0.05));
+        break;
+      case 'ArrowDown': // Ctrl + 下方向键：音量减
+        e.preventDefault();
+        setVolume(Math.max(0, volume.value - 0.05));
+        break;
+    }
+  }
+};
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown);
+});
 </script>
 
 <template>
