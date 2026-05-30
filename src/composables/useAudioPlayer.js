@@ -7,7 +7,7 @@ const isPlaying = ref(false);
 const currentTime = ref(0);
 const duration = ref(0);
 const volume = ref(0.3); // 默认音量设置为 30%
-const playMode = ref('sequence'); // 'sequence', 'loop', 'random'
+const playMode = ref('order'); // 'order', 'sequence', 'loop', 'random'
 const playlist = ref([]);
 const currentSongIndex = ref(-1);
 const loadedSongId = ref(null);
@@ -196,6 +196,7 @@ const next = (isAutoPlay = false) => {
   if (playlist.value.length === 0) return;
   
   let nextIndex = currentSongIndex.value + 1;
+  let shouldPause = false;
   
   if (playMode.value === 'loop' && isAutoPlay) {
     // 自动播放结束时，单曲循环保持播放当前歌曲
@@ -209,14 +210,20 @@ const next = (isAutoPlay = false) => {
       nextIndex = currentSongIndex.value;
     }
   } else {
-    // 列表循环或手动切歌
+    // 顺序播放 ('order')，列表循环 ('sequence') 或手动切歌
     if (nextIndex >= playlist.value.length) {
       nextIndex = 0;
+      // 如果是顺序播放模式，并且是歌曲自然结束触发的自动切歌，则回到第一首并暂停
+      if (playMode.value === 'order' && isAutoPlay) {
+        shouldPause = true;
+      }
     }
   }
   
   loadSong(nextIndex);
-  play();
+  if (!shouldPause) {
+    play();
+  }
 };
 
 const prev = (isAutoPlay = false) => {
@@ -417,7 +424,7 @@ const addLocalFolder = () => {
         });
 
         // 提取本地音频文件的内置封面
-        const cover = await extractCover(file) || `https://picsum.photos/seed/local${idCounter}/300/300`;
+        const cover = await extractCover(file) || `./default-cover.svg`;
 
         localSongs.push({
           id: idCounter++,
@@ -464,11 +471,12 @@ const initPlaylistFromUrl = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const listParam = urlParams.get('list');
   if (listParam) {
-    const ids = listParam.split(',').map(id => parseInt(id, 10));
+    const ids = listParam.split(',');
     const initialPlaylist = [];
     ids.forEach(id => {
       // 只能匹配服务器曲库的歌曲，本地临时导入的歌曲无法通过 URL 恢复
-      const song = librarySongs.value.find(s => s.id === id);
+      // 使用 String 转换以兼容新版 Hash ID 和旧版数字 ID
+      const song = librarySongs.value.find(s => String(s.id) === String(id));
       if (song) {
         initialPlaylist.push(song);
       }

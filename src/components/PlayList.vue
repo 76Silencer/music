@@ -67,6 +67,10 @@ const onTouchEnd = () => {
 const collageCovers = computed(() => {
   return playlist.value.slice(0, 4).map(song => song.cover);
 });
+
+const handleCollageError = (event, index) => {
+  event.target.src = './default-cover.svg';
+};
 </script>
 
 <template>
@@ -77,7 +81,7 @@ const collageCovers = computed(() => {
     
     <div class="playlist-cover-wrapper" v-if="playlist.length > 0">
       <div class="collage-grid" :class="'count-' + Math.min(4, playlist.length)">
-        <img v-for="(cover, i) in collageCovers" :key="i" :src="cover" alt="cover collage" />
+        <img v-for="(cover, i) in collageCovers" :key="i" :src="cover" alt="cover collage" @error="handleCollageError($event, i)" />
       </div>
       <div class="cover-info">
         <h3>我的专属歌单</h3>
@@ -114,7 +118,7 @@ const collageCovers = computed(() => {
           @touchmove.prevent="onTouchMove"
           @touchend="onTouchEnd"
         >⋮⋮</div>
-        <img :src="song.cover" alt="cover" class="cover-img" />
+        <img :src="song.cover" alt="cover" class="cover-img" @error="song.cover = './default-cover.jpg'" />
         <div class="song-info">
           <div class="title">{{ song.title }}</div>
           <div class="artist">{{ song.artist }}</div>

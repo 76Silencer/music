@@ -37,8 +37,8 @@ const filteredSongs = computed(() => {
         class="song-item"
         @click="addToPlaylist(song)"
       >
-        <span class="song-index" v-if="!song.isLocal">{{ song.id }}</span>
-        <img :src="song.cover" alt="cover" class="cover-img" />
+        <span class="song-index" v-if="!song.isLocal">{{ song.no }}</span>
+        <img :src="song.cover" alt="cover" class="cover-img" @error="song.cover = './default-cover.svg'" />
         <div class="song-info">
           <div class="title">{{ song.title }}</div>
           <div class="artist">{{ song.artist }}</div>

@@ -37,7 +37,7 @@ const openDetail = () => {
         <div class="now-playing-info" @click="openDetail" :class="{ 'clickable': currentSong && !showDetail }">
           <template v-if="currentSong">
             <div class="cover-container">
-              <img :src="currentSong.cover" class="now-playing-cover" alt="cover" />
+              <img :src="currentSong.cover" class="now-playing-cover" alt="cover" @error="currentSong.cover = './default-cover.svg'" />
               <div class="expand-icon" v-if="!showDetail">⤢</div>
             </div>
             <div class="np-text">

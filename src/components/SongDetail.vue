@@ -56,7 +56,11 @@ const scrollLyrics = async () => {
     // 居中对齐滚动
     const containerHeight = lyricsContainer.value.clientHeight;
     const offsetTop = activeLyric.offsetTop;
-    const scrollPosition = offsetTop - containerHeight / 2 + activeLyric.clientHeight / 2;
+    
+    // 网页端因为上方有标题和歌手名占据了空间，导致歌词容器本身的视觉中心偏下
+    // 这里额外增加 80px 的向下滚动量，让高亮歌词在屏幕上“向上提”，与左侧唱片完美水平对齐
+    const alignOffset = window.innerWidth > 768 ? 80 : 20;
+    const scrollPosition = offsetTop - containerHeight / 2 + activeLyric.clientHeight / 2 + alignOffset;
     
     lyricsContainer.value.scrollTo({
       top: scrollPosition,
@@ -95,7 +99,7 @@ onMounted(() => {
       <!-- 左侧封面区域 -->
       <div class="cover-section">
         <div class="cd-wrapper" :class="{ 'playing': isPlaying }">
-          <img :src="currentSong.cover" class="large-cover" alt="cover" />
+          <img :src="currentSong.cover" class="large-cover" alt="cover" @error="currentSong.cover = './default-cover.svg'" />
         </div>
       </div>
       
@@ -279,6 +283,8 @@ onMounted(() => {
   mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
   -webkit-mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
   text-align: center;
+  display: flex;
+  flex-direction: column;
 }
 
 .lyrics-container::-webkit-scrollbar {
@@ -350,7 +356,14 @@ onMounted(() => {
   background: rgba(59, 130, 246, 0.8);
 }
 
-.no-lyrics, .empty-state {
+.no-lyrics {
+  color: #b3b3b3;
+  text-align: center;
+  margin: auto; /* 关键：结合 flex 容器让其绝对居中 */
+  font-size: 18px;
+}
+
+.empty-state {
   color: #b3b3b3;
   text-align: center;
   margin-top: 100px;
@@ -403,7 +416,11 @@ onMounted(() => {
   }
   
   .lyrics-container {
-    padding: 120px 0; /* 适配移动端高度变小 */
+    padding: 0; /* 在手机上如果没有歌词，取消 padding 以保证完全居中 */
+  }
+  
+  .lyrics-container:has(.lyric-line) {
+    padding: 120px 0; /* 如果有歌词，才保留上下滚动 padding */
   }
   
   .lyric-line {

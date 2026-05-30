@@ -56,13 +56,14 @@ const handleVolume = (e) => {
 };
 
 const toggleMode = () => {
-  const modes = ['sequence', 'loop', 'random'];
+  const modes = ['order', 'sequence', 'loop', 'random'];
   const nextIndex = (modes.indexOf(playMode.value) + 1) % modes.length;
   setPlayMode(modes[nextIndex]);
 };
 
 const modeLabel = computed(() => {
   const map = {
+    order: '⬇️ 顺序',
     sequence: '🔁 列表',
     loop: '🔂 单曲',
     random: '🔀 随机'
