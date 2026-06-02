@@ -5,13 +5,49 @@ import { useAudioPlayer } from '../composables/useAudioPlayer';
 const { librarySongs, addToPlaylist, addLocalFolder } = useAudioPlayer();
 const searchQuery = ref('');
 
+const sortType = ref('default'); // 'default', 'titleAsc', 'titleDesc', 'durationAsc', 'durationDesc'
+
+const toggleSort = (type) => {
+  if (type === 'title') {
+    if (sortType.value === 'titleAsc') sortType.value = 'titleDesc';
+    else if (sortType.value === 'titleDesc') sortType.value = 'default';
+    else sortType.value = 'titleAsc';
+  } else if (type === 'duration') {
+    if (sortType.value === 'durationAsc') sortType.value = 'durationDesc';
+    else if (sortType.value === 'durationDesc') sortType.value = 'default';
+    else sortType.value = 'durationAsc';
+  }
+};
+
+const formatDuration = (seconds) => {
+  if (!seconds || isNaN(seconds)) return '';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
+
 const filteredSongs = computed(() => {
+  let result = [...librarySongs.value];
+  
   const query = searchQuery.value.toLowerCase();
-  if (!query) return librarySongs.value;
-  return librarySongs.value.filter(song => 
-    song.title.toLowerCase().includes(query) || 
-    song.artist.toLowerCase().includes(query)
-  );
+  if (query) {
+    result = result.filter(song => 
+      song.title.toLowerCase().includes(query) || 
+      song.artist.toLowerCase().includes(query)
+    );
+  }
+  
+  if (sortType.value === 'titleAsc') {
+    result.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'));
+  } else if (sortType.value === 'titleDesc') {
+    result.sort((a, b) => b.title.localeCompare(a.title, 'zh-CN'));
+  } else if (sortType.value === 'durationAsc') {
+    result.sort((a, b) => (a.duration || 0) - (b.duration || 0));
+  } else if (sortType.value === 'durationDesc') {
+    result.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+  }
+  
+  return result;
 });
 </script>
 
@@ -28,6 +64,29 @@ const filteredSongs = computed(() => {
         placeholder="搜索歌曲或歌手..." 
         class="search-input"
       />
+      <div class="sort-controls">
+        <span class="sort-label">排序：</span>
+        <button 
+          class="sort-btn" 
+          :class="{ active: sortType.startsWith('title') }"
+          @click="toggleSort('title')"
+        >
+          名称 
+          <span v-if="sortType === 'titleAsc'">↑</span>
+          <span v-else-if="sortType === 'titleDesc'">↓</span>
+          <span v-else>-</span>
+        </button>
+        <button 
+          class="sort-btn" 
+          :class="{ active: sortType.startsWith('duration') }"
+          @click="toggleSort('duration')"
+        >
+          时长 
+          <span v-if="sortType === 'durationAsc'">↑</span>
+          <span v-else-if="sortType === 'durationDesc'">↓</span>
+          <span v-else>-</span>
+        </button>
+      </div>
     </div>
     
     <div class="song-list">
@@ -37,12 +96,13 @@ const filteredSongs = computed(() => {
         class="song-item"
         @click="addToPlaylist(song)"
       >
-        <span class="song-index" v-if="!song.isLocal">{{ song.no }}</span>
+        <span class="song-index">{{ song.isLocal ? '-' : song.no }}</span>
         <img :src="song.cover" alt="cover" class="cover-img" @error="song.cover = './default-cover.svg'" />
         <div class="song-info">
           <div class="title">{{ song.title }}</div>
           <div class="artist">{{ song.artist }}</div>
         </div>
+        <div class="song-duration" v-if="song.duration">{{ formatDuration(song.duration) }}</div>
         <button class="add-btn" title="添加到播放列表">＋</button>
       </div>
       <div v-if="filteredSongs.length === 0" class="empty-state">
@@ -124,6 +184,43 @@ h2 {
   border-color: #3b82f6;
 }
 
+.sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sort-label {
+  font-size: 13px;
+  color: #b3b3b3;
+}
+
+.sort-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #b3b3b3;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sort-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.sort-btn.active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #3b82f6;
+}
+
 .song-list {
   overflow-y: auto;
   flex: 1;
@@ -178,6 +275,13 @@ h2 {
 .artist {
   font-size: 13px;
   color: #b3b3b3;
+}
+
+.song-duration {
+  font-size: 12px;
+  color: #b3b3b3;
+  margin-right: 12px;
+  font-family: monospace;
 }
 
 .add-btn {

@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue';
 import { useAudioPlayer } from '../composables/useAudioPlayer';
 
-const { playlist, currentSong, playSongById, isPlaying, removeFromPlaylist, moveSong } = useAudioPlayer();
+const { playlist, currentSong, playSongById, isPlaying, removeFromPlaylist, clearPlaylist, moveSong } = useAudioPlayer();
 
 const searchQuery = ref('');
 
@@ -63,9 +63,16 @@ const onTouchEnd = () => {
   document.body.style.overflow = '';
 };
 
-// 提取前 4 首歌的封面用于生成九宫格/四宫格
+// 提取前 4 首歌的非兜底封面用于生成九宫格/四宫格
 const collageCovers = computed(() => {
-  return playlist.value.slice(0, 4).map(song => song.cover);
+  const validCovers = playlist.value
+    .filter(song => !song.cover.includes('default-cover'))
+    .map(song => song.cover);
+  
+  if (validCovers.length === 0) {
+    return ['./default-cover.svg'];
+  }
+  return validCovers.slice(0, 4);
 });
 
 const handleCollageError = (event, index) => {
@@ -104,10 +111,11 @@ const sharePlaylist = async () => {
   <div class="playlist">
     <div class="playlist-header">
       <h2>播放列表</h2>
+      <button class="clear-btn" v-if="playlist.length > 0" @click="clearPlaylist" title="清空列表">清空</button>
     </div>
     
     <div class="playlist-cover-wrapper" v-if="playlist.length > 0">
-      <div class="collage-grid" :class="'count-' + Math.min(4, playlist.length)">
+      <div class="collage-grid" :class="'count-' + collageCovers.length">
         <img v-for="(cover, i) in collageCovers" :key="i" :src="cover" alt="cover collage" @error="handleCollageError($event, i)" />
       </div>
       <div class="cover-info">
@@ -146,7 +154,7 @@ const sharePlaylist = async () => {
           @touchmove.prevent="onTouchMove"
           @touchend="onTouchEnd"
         >⋮⋮</div>
-        <img :src="song.cover" alt="cover" class="cover-img" @error="song.cover = './default-cover.jpg'" />
+        <img :src="song.cover" alt="cover" class="cover-img" @error="song.cover = './default-cover.svg'" />
         <div class="song-info">
           <div class="title">{{ song.title }}</div>
           <div class="artist">{{ song.artist }}</div>
@@ -224,6 +232,22 @@ const sharePlaylist = async () => {
 h2 {
   font-size: 18px;
   margin: 0;
+  color: #fff;
+}
+
+.clear-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #b3b3b3;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clear-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
 }
 

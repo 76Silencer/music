@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import jsmediatags from 'jsmediatags';
 import crypto from 'crypto';
+import * as mm from 'music-metadata';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -92,13 +93,22 @@ async function generate() {
     // 这里不再使用外部的 picsum.photos 占位图，而是直接在没有封面的情况下使用一个内置的默认封面图片，或者不设置 cover 字段
     const coverUrl = hasCover ? `./covers/${coverFileName}` : `./default-cover.svg`;
 
+    let duration = 0;
+    try {
+      const metadata = await mm.parseFile(audioFilePath, { duration: true });
+      duration = metadata.format.duration || 0;
+    } catch (err) {
+      console.log(`Failed to extract duration for ${file}`);
+    }
+
     songs.push({
       id: songId,
       no: index + 1, // 仅用于 UI 显示的视觉序号
       title: title,
       artist: artist,
       url: `./songs/${file}`,
-      cover: coverUrl
+      cover: coverUrl,
+      duration: duration
     });
   }
 

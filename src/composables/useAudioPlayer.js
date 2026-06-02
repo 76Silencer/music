@@ -362,6 +362,18 @@ const removeFromPlaylist = (songId) => {
   }
 };
 
+const clearPlaylist = () => {
+  pause();
+  playlist.value.splice(0, playlist.value.length);
+  currentSongIndex.value = -1;
+  loadedSongId.value = null;
+  audio.src = '';
+  lyrics.value = [];
+  currentLyricIndex.value = -1;
+  duration.value = 0;
+  currentTime.value = 0;
+};
+
 const moveSong = (oldIndex, newIndex) => {
   if (oldIndex === newIndex) return;
   if (newIndex < 0 || newIndex >= playlist.value.length) return;
@@ -407,6 +419,14 @@ const extractCover = (file) => {
   });
 };
 
+const getLocalDuration = (url) => {
+  return new Promise((resolve) => {
+    const tempAudio = new Audio(url);
+    tempAudio.addEventListener('loadedmetadata', () => resolve(tempAudio.duration));
+    tempAudio.addEventListener('error', () => resolve(0));
+  });
+};
+
 const addLocalFolder = () => {
   // 即使在非安全环境 (HTTP) 下也能通过 input 标签选择文件夹，规避了 showDirectoryPicker 对 HTTPS 的强制要求
   const input = document.createElement('input');
@@ -449,6 +469,9 @@ const addLocalFolder = () => {
         // 提取本地音频文件的内置封面
         const cover = await extractCover(file) || `./default-cover.svg`;
         
+        // 提取音频时长
+        const duration = await getLocalDuration(url);
+        
         // 首字母取 g~z，后接 5 位十六进制字符，保证 6 位长度且绝不和云端 MD5(0~9, a~f) 发生冲突
         const firstChars = 'ghijklmnopqrstuvwxyz';
         const firstChar = firstChars[Math.floor(Math.random() * firstChars.length)];
@@ -461,6 +484,7 @@ const addLocalFolder = () => {
           artist,
           url,
           cover,
+          duration,
           isLocal: true,
           file: file,
           lrcFile: lrcFile || null
@@ -545,6 +569,7 @@ export function useAudioPlayer() {
     playSongById,
     addToPlaylist,
     removeFromPlaylist,
+    clearPlaylist,
     moveSong,
     addLocalFolder
   };
